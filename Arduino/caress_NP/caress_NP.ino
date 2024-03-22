@@ -78,6 +78,17 @@ void loop()
 } //**************************** END LOOP ***************************//
 
 void readStimuli(long Rx_data) {
+
+    pos1 = Dynamixel.readPosition(SERVO_01);
+    pos2 = Dynamixel.readPosition(SERVO_02);
+
+    if(pos1 - pos2 > 640){
+      Serial.println("Motor cannot make full stim");}
+    
+    if(1023-pos > pos2){
+      side = !side;
+      }
+  
   int t = Rx_data % 10000; // Extracts the last 4 digits (0200)
   Rx_data /= 10000; // Remove the last 4 digits
   int n = Rx_data % 10; // Extracts the next digit (2)
