@@ -2,6 +2,8 @@
 #include <SPI.h>
 #include "printf.h"
 #include "RF24.h"
+#include <EEPROM.h> // Include the EEPROM library
+
 RF24 radio(9, 10); // using pin 9 for the CE pin, and pin 10 for the CSN pin
 uint8_t address[][6] = {"M2T", "M2A", "M2V"}; // RF pairs
 uint8_t vel[4] = {60, 90, 120, 180}; //levels of intensity for the motors
@@ -95,6 +97,14 @@ void readStimuli(long Rx_data) {
   Rx_data /= 10; // Remove the extracted digit
   int pos = Rx_data; // The remaining value is the first digit (1)
 
+  if (n == 0) {  // If the intensity is 0, save the position
+      savePosition(pos);
+      return;
+  } else if (n == 9) { // If the intensity is 9, load the saved position
+      loadPosition(pos);
+      return;
+  }
+
   // Print the values of t, n, and pos
   Serial.println(Rx_data);
   Serial.print("  t: ");  t = t * 10;  Serial.print(t);
@@ -156,4 +166,45 @@ void stopStim() {
     Serial.println("STOP");
     Dynamixel.servo(SERVO_01, 0, 0x900);delay(1); //move motors to initial position
     Dynamixel.servo(SERVO_02, 1023, 0x900);delay(1);  
+}
+
+void savePosition(int position) {
+    pos1 = Dynamixel.readPosition(SERVO_01);
+    pos2 = Dynamixel.readPosition(SERVO_02);
+
+    Serial.println("Saving Position: " + String(position));
+    Serial.println("pos1 = " + String(pos1));
+    Serial.println("pos2 = " + String(pos2));
+
+    int eepromAddress = position * 4; // Each position will take 4 bytes (2 bytes for each servo position)
+
+    // Save pos1 to EEPROM
+    EEPROM.write(eepromAddress, (pos1 >> 8) & 0xFF);
+    EEPROM.write(eepromAddress + 1, pos1 & 0xFF);
+
+    // Save pos2 to EEPROM
+    EEPROM.write(eepromAddress + 2, (pos2 >> 8) & 0xFF);
+    EEPROM.write(eepromAddress + 3, pos2 & 0xFF);
+
+    Serial.println("Position saved to EEPROM.");
+}
+
+void loadPosition(int position) {
+    int eepromAddress = position * 4;
+
+    // Read pos1 from EEPROM
+    int pos1 = (EEPROM.read(eepromAddress) << 8) + EEPROM.read(eepromAddress + 1);
+
+    // Read pos2 from EEPROM
+    int pos2 = (EEPROM.read(eepromAddress + 2) << 8) + EEPROM.read(eepromAddress + 3);
+
+    Serial.println("Loaded Position: " + String(position));
+    Serial.println("pos1 = " + String(pos1));
+    Serial.println("pos2 = " + String(pos2));
+
+    // Move the servos to the loaded positions
+    Dynamixel.servo(SERVO_01, pos1, 0x2FF);
+    delay(3);
+    Dynamixel.servo(SERVO_02, pos2, 0x2FF);
+    delay(3);
 }

@@ -107,7 +107,7 @@ void SerialEvent() {
     sendStimuli(Tx_data);
     lcd.setRGB(0, 0, 100);
     lcd.setCursor(0, 0);
-    String lcdMessage = Mods[stim_mod.toInt() - 1] +  "I " + Tx_data;
+    String lcdMessage = Mods[stim_mod.toInt() - 1] +  " P" + Fmar.substring(1, 2) + " I" +Fmar.substring(2, 3)+ " "+Fmar.substring(3, 7) + "0ms";
     lcd.print(lcdMessage);
   }
   else if (Fmar.indexOf("33083") >= 0) {  
