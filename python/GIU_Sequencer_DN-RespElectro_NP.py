@@ -47,17 +47,17 @@ class InterfaceApp_NP:
                            ("Vib 4 P2", self.vibstim, self.rest, "3240300"),
                            ("Vib 4 P3 & Long Rest", self.vibstim, self.rest, "3340300")],
                           [("Car 1 P1", self.carstim, self.rest, "1110400"),
-                           ("Car 1 P2", self.carstim, self.rest, "1110400"),
-                           ("Car 1 P3", self.carstim, self.rest, "1110400"),
+                           ("Car 1 P2", self.carstim, self.rest, "1210400"),
+                           ("Car 1 P3", self.carstim, self.rest, "1310400"),
                            ("Car 2 P1", self.carstim, self.rest, "1120400"),
-                           ("Car 2 P2", self.carstim, self.rest, "1120400"),
-                           ("Car 2 P3", self.carstim, self.rest, "1120400"),
+                           ("Car 2 P2", self.carstim, self.rest, "1220400"),
+                           ("Car 2 P3", self.carstim, self.rest, "1320400"),
                            ("Car 3 P1", self.carstim, self.rest, "1130400"),
-                           ("Car 3 P2", self.carstim, self.rest, "1130400"),
-                           ("Car 3 P3", self.carstim, self.rest, "1130400"),
+                           ("Car 3 P2", self.carstim, self.rest, "1230400"),
+                           ("Car 3 P3", self.carstim, self.rest, "1330400"),
                            ("Car 4 P1", self.carstim, self.rest, "1140400"),
-                           ("Car 4 P2", self.carstim, self.rest, "1140400"),
-                           ("Car 4 P3 & Long Rest", self.carstim, 30, "1140400")]]
+                           ("Car 4 P2", self.carstim, self.rest, "1240400"),
+                           ("Car 4 P3 & Long Rest", self.carstim, 30, "1340400")]]
         
         self.save_labels = [("Save P1", "1100000"), ("Save P2", "1200000"), ("Save P3", "1300000")]
         self.load_labels = [("Load P1", "1190000"), ("Load P2", "1290000"), ("Load P3", "1390000")]

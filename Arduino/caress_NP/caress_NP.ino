@@ -7,14 +7,26 @@
 RF24 radio(9, 10); // using pin 9 for the CE pin, and pin 10 for the CSN pin
 uint8_t address[][6] = {"M2T", "M2A", "M2V"}; // RF pairs
 uint8_t vel[4] = {60, 90, 120, 180}; //levels of intensity for the motors
+int pos2final[3][4];
+int pos1final[3][4];
 
-int pos1 , pos2;
+int pos1[3];
+int pos2[3];
+
 byte payload = 0x00;
-byte pos = 0;
 bool side = 1;
+int delt = 5; //ms to wait
 
 unsigned long Rx_data;
+int t; 
+int vel_idx; 
 
+uint8_t pipe;
+uint8_t bytes;
+
+int loc;
+
+int eepromAddress;
 //-----------------Servos-----------------//
 //Libraries used: https://github.com/zcshiner/Dynamixel_Serial/blob/master/Dynamixel%20Institution%20V2.pdf
 #include <Dynamixel_Serial.h>     // Library needed to control Dynamixal servo
@@ -53,24 +65,20 @@ void setup()
     Dynamixel.setStatusPaketReturnDelay(SERVO_01, 6);          // Set Return packet delay to 6 uSec
     Dynamixel.setStatusPaketReturnDelay(SERVO_02, 6);          // Set Return packet delay to 6 uSec
     Dynamixel.setMode(SERVO_02, SERVO, CW_LIMIT_ANGLE, CCW_LIMIT_ANGLE);delay(5);
-    Dynamixel.setMode(SERVO_01, SERVO, CW_LIMIT_ANGLE, CCW_LIMIT_ANGLE);delay(5);// set mode to SERVO and set angle limits  
+    Dynamixel.setMode(SERVO_01, SERVO, CW_LIMIT_ANGLE, CCW_LIMIT_ANGLE);delay(5); 
     Dynamixel.setMaxTorque(SERVO_01,0x2FF);
     Dynamixel.setMaxTorque(SERVO_02,0x2FF); 
-    pos1 = Dynamixel.readPosition(SERVO_01);
-    pos2 = Dynamixel.readPosition(SERVO_02);
-    Serial.println("pos1 = " + String(pos1));
-    Serial.println("pos2 = " + String(pos2));
 
+    // Servos calculate final position for each velocity and location.
+    CalculateFinalPositions();
 } 
 //**************************END SETUP*******************************//
 
 //**************************** LOOP *********************************//
 void loop()
 {
-  uint8_t pipe;
-
   if (radio.available(&pipe)) {             // is there a payload? get the pipe number that recieved it
-    uint8_t bytes = radio.getPayloadSize(); // get the size of the payload
+    bytes = radio.getPayloadSize(); // get the size of the payload
     radio.read(&Rx_data, bytes);            // fetch payload from FIFO
     if (Rx_data != 999999)
     {
@@ -80,131 +88,115 @@ void loop()
 } //**************************** END LOOP ***************************//
 
 void readStimuli(long Rx_data) {
-
-    pos1 = Dynamixel.readPosition(SERVO_01);
-    pos2 = Dynamixel.readPosition(SERVO_02);
-
-    if(pos1 - pos2 > 640){
-      Serial.println("Motor cannot make full stim");}
-    
-    if(1023-pos > pos2){
-      side = !side;
-      }
   
-  int t = Rx_data % 10000; // Extracts the last 4 digits (0200)
+  t = Rx_data % 10000; // Extracts the last 4 digits (0200)
   Rx_data /= 10000; // Remove the last 4 digits
-  int n = Rx_data % 10; // Extracts the next digit (2)
+  vel_idx = Rx_data % 10; // Extracts the next digit (2)
   Rx_data /= 10; // Remove the extracted digit
-  int pos = Rx_data; // The remaining value is the first digit (1)
+  loc = Rx_data; // The remaining value is the first digit (1)
 
-  if (n == 0) {  // If the intensity is 0, save the position
-      savePosition(pos);
+  if (vel_idx == 0) {  // If the intensity is 0, save the position
+      SaveCurrentLocation(loc-1);
       return;
-  } else if (n == 9) { // If the intensity is 9, load the saved position
-      loadPosition(pos);
+  } 
+  else if (vel_idx == 9) { // If the intensity is 9, load the saved position
+      Move2Location(loc - 1);
       return;
   }
 
-  // Print the values of t, n, and pos
-  Serial.println(Rx_data);
-  Serial.print("  t: ");  t = t * 10;  Serial.print(t);
-  Serial.print("  int: "); Serial.print(n);
-
-  Serial.println("Pos abs = " + String(abs(pos1 - pos2)));
-
-  unsigned long startMillis = millis();
-  unsigned long currentMillis = millis();
-
-  Serial.println(currentMillis - startMillis);
-
-  Serial.println("Stimulating");
-  int i = 0;
-  while (currentMillis - startMillis <= t) {
-    currentMillis = millis();
-    if(currentMillis - startMillis - 1000*i > 1000) {
-        i++;
-        Serial.println("moving");
-        if (side) {
-            stim_r(vel[n-1], 1);
-            side = !side;
-        } else {
-            stim_l(vel[n-1], 1);
-            side = !side;}}  
-
-    uint8_t pipe;
-    if (radio.available(&pipe)) {             // is there a payload? get the pipe number that recieved it
-      uint8_t bytes = radio.getPayloadSize(); // get the size of the payload
-      radio.read(&Rx_data, bytes);            // fetch payload from FIFO
-      if (Rx_data = 999999) {
-        Serial.println("StopLabel");
-        stopStim();
-        currentMillis = 9999;
-      }
-     }
-    }
+  for (int rep = 0; rep <4 ; rep++){
       
-  Serial.println("Finished Stim");
-  //stopStim();    
+      if (side) {
+          mov_final(vel_idx-1, loc-1);
+      } else {
+          mov_init(vel_idx-1, loc-1);
+      }
+
+      side = !side;
+      
+      for (int t_c = 0; t_c < 200; t_c++) {
+          if (radio.available(&pipe)) {             // is there a payload? get the pipe number that recieved it
+            bytes = radio.getPayloadSize(); // get the size of the payload
+            radio.read(&Rx_data, bytes);            // fetch payload from FIFO
+            if (Rx_data = 999999) {
+              OpenServosFull();
+              break;
+              }
+          }
+          delayMicroseconds(delt*990);
+      }
   }
-
-void stim_r(int vel, int t){
-
-  //Serial.println("pos2 = " + String(pos1 + vel * t * 2.27));
-  //Serial.println("pos1 = " + String(pos2 + vel * t * 2.27));
-    Dynamixel.servo(SERVO_01, (pos1 - vel * t * 2.27), vel);delay(3); //move motors to initial position
-    Dynamixel.servo(SERVO_02, (pos2 - vel * t * 2.27), vel);delay(3);
+  OpenServosHalf();
 }
 
-void stim_l(int vel, int t){
-    //Serial.println("pos2 = " + String(pos1));
-    //Serial.println("pos1 = " + String(pos2));
-    Dynamixel.servo(SERVO_01, pos1, vel);delay(3); //move motors to initial position
-    Dynamixel.servo(SERVO_02, pos2, vel);delay(3);
+void mov_final(int vel_idx, int loc){
+    Dynamixel.servo(SERVO_01, pos1final[loc][vel_idx], vel[vel_idx]);delay(3); //move motors to initial position
+    Dynamixel.servo(SERVO_02, pos2final[loc][vel_idx], vel[vel_idx]);delay(3);
 }
 
-void stopStim() {
-    Serial.println("STOP");
-    Dynamixel.servo(SERVO_01, 0, 0x900);delay(1); //move motors to initial position
-    Dynamixel.servo(SERVO_02, 1023, 0x900);delay(1);  
+void mov_init(int vel_idx, int loc){
+    Dynamixel.servo(SERVO_01, pos1[loc], vel[vel_idx]);delay(3); //move motors to initial position
+    Dynamixel.servo(SERVO_02, pos2[loc], vel[vel_idx]);delay(3);
 }
 
-void savePosition(int position) {
-    pos1 = Dynamixel.readPosition(SERVO_01);
-    pos2 = Dynamixel.readPosition(SERVO_02);
+void SaveCurrentLocation(int loc) {
+    pos1[loc] = Dynamixel.readPosition(SERVO_01);
+    pos2[loc] = Dynamixel.readPosition(SERVO_02);
 
-    Serial.println("Saving Position: " + String(position));
-    Serial.println("pos1 = " + String(pos1));
-    Serial.println("pos2 = " + String(pos2));
+    Serial.println("Saving Position: " + String(loc));
+    Serial.println("pos1 = " + String(pos1[loc]));
+    Serial.println("pos2 = " + String(pos2[loc]));
 
-    int eepromAddress = position * 4; // Each position will take 4 bytes (2 bytes for each servo position)
+    int eepromAddress = loc * 4; // Each position will take 4 bytes (2 bytes for each servo position)
 
     // Save pos1 to EEPROM
-    EEPROM.write(eepromAddress, (pos1 >> 8) & 0xFF);
-    EEPROM.write(eepromAddress + 1, pos1 & 0xFF);
+    EEPROM.write(eepromAddress, (pos1[loc] >> 8) & 0xFF);
+    EEPROM.write(eepromAddress + 1, pos1[loc] & 0xFF);
 
     // Save pos2 to EEPROM
-    EEPROM.write(eepromAddress + 2, (pos2 >> 8) & 0xFF);
-    EEPROM.write(eepromAddress + 3, pos2 & 0xFF);
+    EEPROM.write(eepromAddress + 2, (pos2[loc] >> 8) & 0xFF);
+    EEPROM.write(eepromAddress + 3, pos2[loc] & 0xFF);
 
     Serial.println("Position saved to EEPROM.");
+
+    OpenServosHalf();
 }
 
-void loadPosition(int position) {
-    int eepromAddress = position * 4;
+void CalculateFinalPositions() {
+    int eepromAddress;
+    for (int locIndex = 0; locIndex < 3; locIndex++) {
+        eepromAddress = locIndex * 4; // Each position will take 4 bytes (2 bytes for each servo position)
+        pos1[locIndex] = (EEPROM.read(eepromAddress) << 8) + EEPROM.read(eepromAddress + 1);
+        pos2[locIndex] = (EEPROM.read(eepromAddress + 2) << 8) + EEPROM.read(eepromAddress + 3);
+        for (int velIndex = 0; velIndex < 4; velIndex++) {
+            pos1final[locIndex][velIndex] = pos1[locIndex] - vel[velIndex] * 1 * 2.27;
+            pos2final[locIndex][velIndex] = pos2[locIndex] - vel[velIndex] * 1 * 2.27;
+        }
+    }
+}
 
-    // Read pos1 from EEPROM
-    int pos1 = (EEPROM.read(eepromAddress) << 8) + EEPROM.read(eepromAddress + 1);
-
-    // Read pos2 from EEPROM
-    int pos2 = (EEPROM.read(eepromAddress + 2) << 8) + EEPROM.read(eepromAddress + 3);
-
-    Serial.println("Loaded Position: " + String(position));
-    Serial.println("pos1 = " + String(pos1));
-    Serial.println("pos2 = " + String(pos2));
+void Move2Location(int loc) {
+    Serial.println("Loaded Position: " + String(loc));
+    Serial.println("pos1 = " + String(pos1[loc]));
+    Serial.println("pos2 = " + String(pos2[loc]));
 
     // Move the servos to the loaded positions
-    Dynamixel.servo(SERVO_01, pos1, 0x2FF);
+    Dynamixel.servo(SERVO_01, pos1[loc], 0x2FF);
     delay(3);
-    Dynamixel.servo(SERVO_02, pos2, 0x2FF);
+    Dynamixel.servo(SERVO_02, pos2[loc], 0x2FF);
     delay(3);
 }
+
+void OpenServosFull() {
+    Serial.println("STOP");
+    Dynamixel.servo(SERVO_01, 0, 0x2FF);delay(2); //move motors to initial position
+    Dynamixel.servo(SERVO_02, 1023, 0x2FF);delay(2);  
+}
+
+void OpenServosHalf() {
+    Serial.println("STOP");
+    Dynamixel.servo(SERVO_01, 0, 0x2FF);delay(2); //move motors to initial position
+    Dynamixel.servo(SERVO_02, 512, 0x2FF);delay(2);  
+}
+
+
