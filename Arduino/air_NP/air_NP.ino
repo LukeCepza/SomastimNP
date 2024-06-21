@@ -6,7 +6,7 @@ RF24 radio(9, 10); // using pin 9 for the CE pin, and pin 10 for the CSN pin
 uint8_t address[][6] = {"M2T", "M2A", "M2V"};// Let these addresses be used for the pair
 byte payload = 0x00;  
 
-uint8_t fz[4] = {63,127,191,255};    //levels of intensity for the motors
+uint8_t fz[4] = {100,140,190,255};    //levels of intensity for the motors
 
 int position_pin[3] = {5,3,6};
 
@@ -67,12 +67,18 @@ void readStimuli(long Rx_data) {
   Serial.print("  int: "); Serial.print(n);
   Serial.print("  pos: "); Serial.println(pos);
 
-
-analogWrite(position_pin[(pos-1)],fz[(n-1)]);
+analogWrite(position_pin[(pos-1)],255);
 
 unsigned long startMillis = millis();
 unsigned long currentMillis = millis();
-//
+
+delay(300);
+if(pos == 1){
+  analogWrite(position_pin[(pos-1)],fz[(n-1)+10]);
+}
+else {
+  analogWrite(position_pin[(pos-1)],fz[(n-1)]);
+}
 //  
 //  Serial.println(currentMillis - startMillis);
   while (currentMillis - startMillis  <= t) {
